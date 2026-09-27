@@ -1,0 +1,34 @@
+{
+  "language": "en-GB",
+  "port": 8330,
+  "overlay": true,
+  "controller": null,
+  "vr": false,
+  "keys": {
+    "previous": "Prior",
+    "next": "Next",
+    "stop": "End",
+    "volumeUp": "Home",
+    "volumeDown": "Insert",
+    "makeFavourite": "Pause",
+    "goToFavourite": ""
+  },
+  "buttons": {
+    "previous": "",
+    "next": "",
+    "stop": "",
+    "volumeUp": "",
+    "volumeDown": "",
+    "makeFavourite": "",
+    "goToFavourite": ""
+  },
+  "folders": {
+    "ets2": null,
+    "ats": null
+  },
+  "spotifyUrl": "http://localhost:4002/spotify",
+  "spotify": {
+    "clientId": null,
+    "clientSecret": null
+  }
+}
