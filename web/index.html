@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ETS2/ATS - Spotify Overlay</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+
+        body {
+            background: #121212;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: white;
+            overflow: hidden;
+        }
+
+        /* Main screen container */
+        .carplay-container {
+            width: 800px;
+            height: 480px;
+            max-width: 100vw;
+            max-height: 100vh;
+            background-color: #1a1a1a;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: cover;
+            border-radius: 20px;
+            overflow: hidden;
+            display: flex;
+            position: relative;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            transition: background-image 0.5s ease-in-out;
+        }
+
+        /* Glass effect layer */
+        .overlay {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(25px);
+            display: flex;
+        }
+
+        /* Left side: album art */
+        .album-art-section {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding-left: 40px;
+        }
+
+        .album-cover {
+            width: 300px;
+            height: 300px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            object-fit: cover;
+            background: #1a1a1a;
+        }
+
+        .album-cover-placeholder {
+            width: 300px;
+            height: 300px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+
+        .album-cover-placeholder i {
+            font-size: 100px;
+            color: #1DB954;
+        }
+
+        /* Right side: controls and text */
+        .controls-section {
+            flex: 1.2;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 0 50px;
+        }
+
+        .track-info h1 {
+            font-size: 32px;
+            margin-bottom: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .track-info p {
+            font-size: 20px;
+            color: #b3b3b3;
+            margin-bottom: 30px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .connection-status {
+            font-size: 14px;
+            color: #b3b3b3;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .connection-status.connected { color: #1DB954; }
+        .connection-status.disconnected { color: #ff4444; }
+        .connection-status i { font-size: 12px; }
+
+        /* Progress bar */
+        .progress-container { width: 100%; margin-bottom: 30px; }
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+            position: relative;
+            cursor: pointer;
+        }
+        .progress-current {
+            height: 100%;
+            background: #1DB954;
+            border-radius: 3px;
+            transition: width 0.1s linear;
+        }
+        .time-info {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #b3b3b3;
+        }
+
+        /* Buttons */
+        .playback-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 28px;
+            cursor: pointer;
+            transition: transform 0.2s, opacity 0.2s, color 0.2s;
+            opacity: 0.8;
+        }
+
+        .btn:hover { opacity: 1; }
+
+        .btn-play {
+            width: 70px;
+            height: 70px;
+            background: white;
+            color: black;
+            border-radius: 50%;
+            font-size: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 1;
+        }
+
+        .btn:active { transform: scale(0.9); }
+        .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        .btn.active { color: #1DB954; opacity: 1; }
+
+        .btn.small { font-size: 20px; }
+
+        .volume-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .volume-label {
+            font-size: 13px;
+            color: #b3b3b3;
+            min-width: 34px;
+            text-align: center;
+        }
+
+        .loading {
+            text-align: center;
+            color: #b3b3b3;
+            font-size: 18px;
+            margin-top: 50%;
+        }
+    </style>
+</head>
+<body>
+
+<div class="carplay-container">
+    <div class="overlay">
+        <div class="album-art-section" id="albumSection">
+            <div class="album-cover-placeholder" id="albumPlaceholder">
+                <i class="fas fa-music"></i>
+            </div>
+            <img id="albumCover" class="album-cover" style="display: none;" alt="Album Art">
+        </div>
+
+        <div class="controls-section">
+            <div class="connection-status" id="connectionStatus">
+                <i class="fas fa-circle"></i>
+                <span>Connecting...</span>
+            </div>
+
+            <div class="track-info">
+                <h1 id="trackName">-</h1>
+                <p id="artistName">-</p>
+            </div>
+
+            <div class="progress-container">
+                <div class="progress-bar" id="progressBar">
+                    <div class="progress-current" id="progressCurrent"></div>
+                </div>
+                <div class="time-info">
+                    <span id="currentTime">0:00</span>
+                    <span id="totalTime">0:00</span>
+                </div>
+            </div>
+
+            <div class="playback-controls">
+                <button class="btn small" id="btnShuffle" title="Shuffle" disabled><i class="fas fa-random"></i></button>
+                <button class="btn" id="btnPrevious" title="Previous" disabled><i class="fas fa-step-backward"></i></button>
+                <button class="btn btn-play" id="btnPlayPause" title="Play/Pause" disabled>
+                    <i class="fas fa-play" id="playIcon"></i>
+                </button>
+                <button class="btn" id="btnNext" title="Next" disabled><i class="fas fa-step-forward"></i></button>
+                <button class="btn small" id="btnRepeat" title="Repeat" disabled><i class="fas fa-redo"></i></button>
+                <button class="btn small" id="btnFavourite" title="Save to library" disabled><i class="far fa-heart" id="heartIcon"></i></button>
+                <div class="volume-group">
+                    <button class="btn small" id="btnVolumeDown" title="Volume down" disabled><i class="fas fa-volume-down"></i></button>
+                    <span class="volume-label" id="volumeLabel"></span>
+                    <button class="btn small" id="btnVolumeUp" title="Volume up" disabled><i class="fas fa-volume-up"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let updateInterval = null;
+    const API_ENDPOINT = '/spotify';
+    const COMMAND_ENDPOINT = '/command';
+
+    // Local playback state for smooth progress interpolation between polls
+    let playback = {
+        progressMs: 0,
+        durationMs: 0,
+        isPlaying: false,
+        updatedAt: 0
+    };
+
+    function formatTime(ms) {
+        if (!ms || ms < 0) return '0:00';
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    function sendCommand(action, value) {
+        let url = `${COMMAND_ENDPOINT}?action=${encodeURIComponent(action)}`;
+        if (value !== undefined) url += `&value=${encodeURIComponent(value)}`;
+        fetch(url).catch(err => console.error('Command failed:', err));
+    }
+
+    function setEnabled(enabled) {
+        ['btnShuffle', 'btnPrevious', 'btnPlayPause', 'btnNext', 'btnRepeat',
+         'btnFavourite', 'btnVolumeUp', 'btnVolumeDown'].forEach(id => {
+            document.getElementById(id).disabled = !enabled;
+        });
+    }
+
+    function updateUI(data) {
+        const trackNameEl = document.getElementById('trackName');
+        const artistNameEl = document.getElementById('artistName');
+        const albumCoverEl = document.getElementById('albumCover');
+        const albumPlaceholderEl = document.getElementById('albumPlaceholder');
+        const connectionStatusEl = document.getElementById('connectionStatus');
+        const playIconEl = document.getElementById('playIcon');
+        const heartIconEl = document.getElementById('heartIcon');
+        const volumeLabelEl = document.getElementById('volumeLabel');
+        const carplayContainer = document.querySelector('.carplay-container');
+
+        const isConnected = data.isConnected || data.connected || false;
+
+        if (isConnected && data.track) {
+            connectionStatusEl.className = 'connection-status connected';
+            connectionStatusEl.innerHTML = '<i class="fas fa-circle"></i><span>Connected to Spotify</span>';
+            setEnabled(true);
+
+            trackNameEl.textContent = data.track && data.track.trim() !== '' ? data.track : '-';
+            artistNameEl.textContent = data.artist && data.artist.trim() !== '' ? data.artist : '-';
+
+            // Album art + blurred background
+            if (data.coverUrl && data.coverUrl.trim() !== '') {
+                albumCoverEl.src = data.coverUrl;
+                albumCoverEl.onload = function() {
+                    albumPlaceholderEl.style.display = 'none';
+                    albumCoverEl.style.display = 'block';
+                    carplayContainer.style.backgroundImage = `url('${data.coverUrl}')`;
+                };
+                albumCoverEl.onerror = function() {
+                    albumPlaceholderEl.style.display = 'flex';
+                    albumCoverEl.style.display = 'none';
+                    carplayContainer.style.backgroundImage = 'none';
+                };
+            } else {
+                albumPlaceholderEl.style.display = 'flex';
+                albumCoverEl.style.display = 'none';
+                carplayContainer.style.backgroundImage = 'none';
+            }
+
+            // Playback state for local interpolation
+            playback.progressMs = data.progressMs || 0;
+            playback.durationMs = data.durationMs || 0;
+            playback.isPlaying = !!data.isPlaying;
+            playback.updatedAt = Date.now();
+
+            playIconEl.className = data.isPlaying ? 'fas fa-pause' : 'fas fa-play';
+
+            // Shuffle / repeat active states
+            document.getElementById('btnShuffle').classList.toggle('active', !!data.shuffle);
+            const repeatActive = data.repeat === 'track' || data.repeat === 'context';
+            document.getElementById('btnRepeat').classList.toggle('active', repeatActive);
+            document.getElementById('btnRepeat').title =
+                'Repeat: ' + (data.repeat || 'off') + ' (click to cycle)';
+
+            // Favourite state
+            const saved = !!data.saved;
+            heartIconEl.className = saved ? 'fas fa-heart' : 'far fa-heart';
+            document.getElementById('btnFavourite').classList.toggle('active', saved);
+
+            // Volume
+            volumeLabelEl.textContent = (data.volume === null || data.volume === undefined) ? '' : data.volume + '%';
+        } else {
+            connectionStatusEl.className = 'connection-status disconnected';
+            connectionStatusEl.innerHTML = '<i class="fas fa-circle"></i><span>Not Connected</span>';
+            setEnabled(false);
+
+            trackNameEl.textContent = '-';
+            artistNameEl.textContent = '-';
+            albumPlaceholderEl.style.display = 'flex';
+            albumCoverEl.style.display = 'none';
+            carplayContainer.style.backgroundImage = 'none';
+            playIconEl.className = 'fas fa-play';
+            volumeLabelEl.textContent = '';
+            playback = { progressMs: 0, durationMs: 0, isPlaying: false, updatedAt: Date.now() };
+            renderProgress();
+        }
+    }
+
+    // Advances the progress bar between polls (1s poll, smooth display)
+    function renderProgress() {
+        const progressCurrentEl = document.getElementById('progressCurrent');
+        const currentTimeEl = document.getElementById('currentTime');
+        const totalTimeEl = document.getElementById('totalTime');
+
+        let progress = playback.progressMs;
+        if (playback.isPlaying && playback.updatedAt > 0) {
+            progress += (Date.now() - playback.updatedAt);
+        }
+        if (playback.durationMs > 0 && progress > playback.durationMs) {
+            progress = playback.durationMs;
+        }
+
+        if (playback.durationMs > 0) {
+            const percent = Math.min(100, Math.max(0, (progress / playback.durationMs) * 100));
+            progressCurrentEl.style.width = percent + '%';
+            currentTimeEl.textContent = formatTime(progress);
+            totalTimeEl.textContent = formatTime(playback.durationMs);
+        } else {
+            progressCurrentEl.style.width = '0%';
+            currentTimeEl.textContent = '0:00';
+            totalTimeEl.textContent = '0:00';
+        }
+    }
+
+    async function fetchSpotifyData() {
+        try {
+            const response = await fetch(API_ENDPOINT);
+            if (!response.ok) {
+                throw new Error('Failed to fetch Spotify data');
+            }
+            const data = await response.json();
+            updateUI(data);
+        } catch (error) {
+            console.error('Error fetching Spotify data:', error);
+            const connectionStatusEl = document.getElementById('connectionStatus');
+            connectionStatusEl.className = 'connection-status disconnected';
+            connectionStatusEl.innerHTML = '<i class="fas fa-circle"></i><span>Connection Error</span>';
+        }
+    }
+
+    function wireControls() {
+        document.getElementById('btnPlayPause').addEventListener('click', () => sendCommand('playpause'));
+        document.getElementById('btnNext').addEventListener('click', () => sendCommand('next'));
+        document.getElementById('btnPrevious').addEventListener('click', () => sendCommand('previous'));
+        document.getElementById('btnShuffle').addEventListener('click', () => sendCommand('shuffle'));
+        document.getElementById('btnRepeat').addEventListener('click', () => sendCommand('repeat'));
+        document.getElementById('btnFavourite').addEventListener('click', () => sendCommand('favourite'));
+        document.getElementById('btnVolumeUp').addEventListener('click', () => sendCommand('volume', 10));
+        document.getElementById('btnVolumeDown').addEventListener('click', () => sendCommand('volume', -10));
+
+        // Click-to-seek on the progress bar
+        document.getElementById('progressBar').addEventListener('click', function(e) {
+            if (playback.durationMs <= 0) return;
+            const rect = this.getBoundingClientRect();
+            const ratio = (e.clientX - rect.left) / rect.width;
+            const target = Math.round(Math.min(1, Math.max(0, ratio)) * playback.durationMs);
+            sendCommand('seek', target);
+        });
+    }
+
+    function startPolling() {
+        fetchSpotifyData();
+        if (updateInterval) clearInterval(updateInterval);
+        updateInterval = setInterval(fetchSpotifyData, 1000);
+        // Smooth progress rendering between polls
+        setInterval(renderProgress, 250);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        wireControls();
+        startPolling();
+    });
+
+    window.addEventListener('beforeunload', function() {
+        if (updateInterval) clearInterval(updateInterval);
+    });
+</script>
+
+</body>
+</html>
