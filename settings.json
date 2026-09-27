@@ -5,8 +5,8 @@
   "controller": null,
   "vr": false,
   "keys": {
-    "previous": "Prior",
-    "next": "Next",
+    "previous": "Next",
+    "next": "Prior",
     "stop": "End",
     "volumeUp": "Home",
     "volumeDown": "Insert",
