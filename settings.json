@@ -28,7 +28,7 @@
   },
   "spotifyUrl": "http://localhost:4002/spotify",
   "spotify": {
-    "clientId": null,
-    "clientSecret": null
+    "clientId": "478cbf96776f4f4eb409d55f9a0205ed",
+    "clientSecret": "c858101bd9304c71a6a4085556e709e6"
   }
 }

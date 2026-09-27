@@ -1,0 +1,6 @@
+2:13:19 AM: Spotify connection error: System.NullReferenceException: Object reference not set to an instance of an object.
+   at ETS2_Spotify_Overlay.Main.<spotifyConnectButton_Click>d__46.MoveNext()
+2:16:04 AM: System.NullReferenceException: Object reference not set to an instance of an object.
+   at ETS2_Spotify_Overlay.Main.Main_FormClosing(Object sender, EventArgs e)
+2:16:04 AM: System.NullReferenceException: Object reference not set to an instance of an object.
+   at ETS2_Spotify_Overlay.Main.Main_FormClosing(Object sender, EventArgs e)

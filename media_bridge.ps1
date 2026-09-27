@@ -21,24 +21,52 @@ function Await($WinRtTask, $ResultType) {
     $netTask.Result
 }
 
-Add-Type '
+Add-Type @'
 using System;
 using System.Runtime.InteropServices;
+using System.Threading;
 public static class MediaKeys {
-    [DllImport("user32.dll")]
-    public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+    [StructLayout(LayoutKind.Sequential)]
+    struct KEYBDINPUT { public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public IntPtr dwExtraInfo; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct MOUSEINPUT { public int dx; public int dy; public uint mouseData; public uint dwFlags; public uint time; public IntPtr dwExtraInfo; }
+    [StructLayout(LayoutKind.Explicit)]
+    struct InputUnion { [FieldOffset(0)] public MOUSEINPUT mi; [FieldOffset(0)] public KEYBDINPUT ki; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct INPUT { public uint type; public InputUnion u; }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
     public const byte VK_MEDIA_PLAY_PAUSE = 0xB3;
     public const byte VK_MEDIA_NEXT_TRACK = 0xB0;
     public const byte VK_MEDIA_PREV_TRACK = 0xB1;
     public const byte VK_VOLUME_UP   = 0xAF;
     public const byte VK_VOLUME_DOWN = 0xAE;
 
-    public static void Send(byte vk) {
-        keybd_event(vk, 0, 0, UIntPtr.Zero);
-        keybd_event(vk, 0, 2, UIntPtr.Zero);  // KEYEVENTF_KEYUP
+    const uint KEYEVENTF_EXTENDEDKEY = 0x1;
+    const uint KEYEVENTF_KEYUP = 0x2;
+    const uint INPUT_KEYBOARD = 1;
+
+    static void Tap(byte vk, bool extended) {
+        INPUT[] inp = new INPUT[2];
+        inp[0].type = INPUT_KEYBOARD;
+        inp[0].u.ki.wVk = vk;
+        inp[0].u.ki.dwFlags = extended ? KEYEVENTF_EXTENDEDKEY : 0;
+        inp[1] = inp[0];
+        inp[1].u.ki.dwFlags |= KEYEVENTF_KEYUP;
+        SendInput(2, inp, Marshal.SizeOf(typeof(INPUT)));
+    }
+
+    // Media keys are extended keys - the extended flag matters for Chrome/Spotify.
+    public static void Send(byte vk) { Tap(vk, true); }
+
+    // System volume: each tap is ~2%, do several for a noticeable step.
+    public static void Volume(byte vk, int steps) {
+        for (int i = 0; i < steps; i++) { Tap(vk, false); Thread.Sleep(15); }
     }
 }
-' -ReferencedAssemblies @('System', 'System.Runtime.InteropServices') | Out-Null
+'@ | Out-Null
 
 function Get-MediaInfo {
     try {
@@ -78,14 +106,14 @@ function Send-Command([string]$cmd) {
         'playpause' { [MediaKeys]::Send([MediaKeys]::VK_MEDIA_PLAY_PAUSE) }
         'next'      { [MediaKeys]::Send([MediaKeys]::VK_MEDIA_NEXT_TRACK) }
         'previous'  { [MediaKeys]::Send([MediaKeys]::VK_MEDIA_PREV_TRACK) }
-        'volup'     { [MediaKeys]::Send([MediaKeys]::VK_VOLUME_UP) }
-        'voldown'   { [MediaKeys]::Send([MediaKeys]::VK_VOLUME_DOWN) }
+        'volup'     { [MediaKeys]::Volume([MediaKeys]::VK_VOLUME_UP, 3) }
+        'voldown'   { [MediaKeys]::Volume([MediaKeys]::VK_VOLUME_DOWN, 3) }
         default     { }
     }
 }
 
 Write-Host "Media bridge running. Status -> $script:statusFile"
-$lastCmd = $null
+$lastRaw = $null
 
 while ($true) {
     try {
@@ -100,16 +128,16 @@ while ($true) {
         try { [IO.File]::WriteAllText($script:statusFile, '{"ok":false,"error":"bridge"}') } catch { }
     }
 
+    # The C# app writes "action|nonce" - compare the FULL line so repeated
+    # actions (e.g. volume up twice) are never filtered out.
     if (Test-Path $script:cmdFile) {
         $raw = (Get-Content $script:cmdFile -Raw -ErrorAction SilentlyContinue)
-        if ($raw) {
-            $cmd = ($raw -split '\|')[0].Trim()   # payload is "action|nonce"
-            if ($cmd -and $cmd -ne $lastCmd) {
-                $lastCmd = $cmd
-                Send-Command $cmd
-            }
+        if ($raw -and $raw -ne $lastRaw) {
+            $lastRaw = $raw
+            $cmd = ($raw -split '\|')[0].Trim()
+            if ($cmd) { Send-Command $cmd }
         }
     }
 
-    Start-Sleep -Milliseconds 500
+    Start-Sleep -Milliseconds 300
 }
